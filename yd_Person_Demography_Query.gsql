@@ -1,0 +1,153 @@
+CREATE DISTRIBUTED QUERY yd_Person_Demography_Query(STRING Nomer_KTP) FOR GRAPH ifgl { 
+  SetAccum<STRING> @@person_id;
+  GroupByAccum<STRING person_id, MapAccum<STRING, ListAccum<STRING>>attribute> @@results;
+  
+  searching_person = SELECT s FROM PersonID:s -(HasPersonID)- Person:t
+  WHERE s.id_number == Nomer_KTP
+  ACCUM @@person_id += t.person_id,
+  @@results += (t.person_id->("kdid"->s.id_type)),
+  @@results += (t.person_id->("noid"->s.id_number));
+  
+  FOREACH y in @@person_id DO
+  IF y LIKE "NADM%" THEN
+    nama= SELECT s FROM Person:s -(HasPersonName)- PersonName:t
+    WHERE s.person_id == y
+    ACCUM @@results += (s.person_id -> ("nama"->t.name)),
+          @@results += (s.person_id -> ("kdagama"-> s.religion_code)),
+          @@results += (s.person_id -> ("namaagama"-> s.religion_information)),
+          @@results += (s.person_id -> ("marital_status"-> s.marital_status)),
+          @@results += (s.person_id -> ("tinggibadan"->s.height)),
+          @@results += (s.person_id -> ("beratbadan"->s.weight)),
+          @@results += (s.person_id -> ("kdhobby"->s.hobby_code)),
+          @@results += (s.person_id -> ("kdpekerjaan"->s.occupation_code)),
+          @@results += (s.person_id -> ("pendapatan"->to_string(float_to_int(s.income)))),
+          @@results += (s.person_id -> ("sumber_penghasilan"->s.income_source)),
+          @@results += (s.person_id -> ("status tinggal"->s.residence_status)),
+          @@results += (s.person_id -> ("kdpekerjaanlama"->s.occupation_change_code)),
+          @@results += (s.person_id -> ("sumber_dana"->s.funding_source)),
+          @@results += (s.person_id -> ("besar_pendapatan"->s.business_income)),
+          @@results += (s.person_id -> ("bid_usaha"->s.business_field)),
+          @@results += (s.person_id -> ("tanggal rekam"-> datetime_format(s.record_date, "%Y-%m-%d")));
+  
+    personpersonid = SELECT s FROM Person:s -(HasPersonGender)- PersonGender:t
+    WHERE s.person_id == y
+    ACCUM @@results += (s.person_id -> ("jeniskelamin"->t.gender));
+  
+    pobdob = SELECT t FROM PersonPOB:s-(HasPersonPOB)-Person:t-(HasPersonDOB)-PersonDOB:a
+    WHERE t.person_id == y
+    ACCUM @@results += (t.person_id -> ("tempatlahir"->s.place_of_birth)),
+          @@results += (t.person_id -> ("tgllahir"->datetime_format(a.date_of_birth, "%Y-%m-%d"))); 
+  
+    telephonesemua = SELECT s FROM Person:s -((HasMobilePhone|HasPermanentPhone|HasHomePhone|HasFax|HasOthersPhone|HasWorkPhone|HasBillingPhone|HasFax|HasOthersPhone):e)-Phone:t
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasBillingPhone" THEN @@results += (s.person_id->("phonetagihan"->t.phone_number))
+      WHEN "HasPermanentPhone" THEN @@results += (s.person_id->("phonetetap"->t.phone_number))
+    END;
+  
+    emailsemua = SELECT s FROM Person:s -((HasBillingEmail|HasPermanentEmail|HasOthersEmail):e)-Email:t
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasPermanentEmail" THEN @@results += (s.person_id -> ("emailtetap"->t.email_name))
+      WHEN "HasBillingEmail" THEN @@results += (s.person_id->("emailtagihan"->t.email_name))
+      WHEN "HasOthersEmail" THEN @@results += (s.person_id->("emaillain"->t.email_name))
+    END;
+    
+    propinsisemua = SELECT s FROM Person:s -((HasWorkAddress|HasPermanentAddress|HasOthersAddress):e)- Address:t -(HasAddressProvince)- Province:m
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasPermanentAddress" THEN @@results += (s.person_id-> ("kdpropinsitetap"->m.province_code))
+      WHEN "HasWorkAddress" THEN @@results += (s.person_id->("kdpropinsikerja"->m.province_code))
+      WHEN "HasOthersAddress" THEN @@results += (s.person_id->("kdpropinsilain"->m.province_code))
+    END;
+  
+    zipcodesemua = SELECT s FROM Person:s -((HasWorkAddress|HasPermanentAddress|HasOthersAddress):e)- Address:t -(HasAddressZipCode)- ZipCode:m
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasPermanentAddress" THEN @@results += (s.person_id-> ("kodepostetap"->m.zipcode_number))
+      WHEN "HasWorkAddress" THEN @@results += (s.person_id->("kdposkerja"->m.zipcode_number))
+      WHEN "HasOthersAddress" THEN @@results += (s.person_id->("kdposlain"->m.zipcode_number))
+    END;
+
+    alamattagihansemua = SELECT s FROM Person:s -(HasPolicyPayer)- Policy:p -(HasPolicyBillingAddress)- Address:r -(HasAddressZipCode)- ZipCode:w
+    WHERE s.person_id == y
+    ACCUM @@results += (s.person_id -> ("kodepostagihan"->w.zipcode_number));
+  ELSE
+    nama= SELECT s FROM Person:s -(HasPersonName)- PersonName:t
+    WHERE s.person_id == y
+    ACCUM @@results += (s.person_id -> ("nama"->t.name)),
+          @@results += (s.person_id -> ("kdagama"-> s.religion_code)),
+          @@results += (s.person_id -> ("namaagama"-> s.religion_information)),
+          @@results += (s.person_id -> ("marital_status"-> s.marital_status)),
+          @@results += (s.person_id -> ("tinggibadan"->s.height)),
+          @@results += (s.person_id -> ("beratbadan"->s.weight)),
+          @@results += (s.person_id -> ("kdhobby"->s.hobby_code)),
+          @@results += (s.person_id -> ("kdpekerjaan"->s.occupation_code)),
+          @@results += (s.person_id -> ("pendapatan"->to_string(float_to_int(s.income)))),
+          @@results += (s.person_id -> ("sumber_penghasilan"->s.income_source)),
+          @@results += (s.person_id -> ("status tinggal"->s.residence_status)),
+          @@results += (s.person_id -> ("kdpekerjaanlama"->s.occupation_change_code)),
+          @@results += (s.person_id -> ("sumber_dana"->s.funding_source)),
+          @@results += (s.person_id -> ("besar_pendapatan"->s.business_income)),
+          @@results += (s.person_id -> ("bid_usaha"->s.business_field)),
+          @@results += (s.person_id -> ("tanggal rekam"-> datetime_format(s.record_date, "%Y-%m-%d")));
+  
+    personpersonid = SELECT s FROM Person:s -(HasPersonGender)- PersonGender:t
+    WHERE s.person_id == y
+    ACCUM @@results += (s.person_id -> ("jeniskelamin"->t.gender));
+  
+    pobdob = SELECT t FROM PersonPOB:s-(HasPersonPOB)-Person:t-(HasPersonDOB)-PersonDOB:a
+    WHERE t.person_id == y
+    ACCUM @@results += (t.person_id -> ("tempatlahir"->s.place_of_birth)),
+          @@results += (t.person_id -> ("tgllahir"->datetime_format(a.date_of_birth, "%Y-%m-%d"))); 
+  
+    telephonesemua = SELECT s FROM Person:s -((HasMobilePhone|HasPermanentPhone|HasHomePhone|HasFax|HasOthersPhone|HasWorkPhone|HasBillingPhone|HasFax|HasOthersPhone):e)-Phone:t
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasBillingPhone" THEN @@results += (s.person_id->("phonetagihan"->t.phone_number))
+      WHEN "HasPermanentPhone" THEN @@results += (s.person_id->("phonetetap"->t.phone_number))
+    END;
+  
+    emailsemua = SELECT s FROM Person:s -((HasBillingEmail|HasPermanentEmail|HasOthersEmail):e)-Email:t
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasPermanentEmail" THEN @@results += (s.person_id -> ("emailtetap"->t.email_name))
+      WHEN "HasBillingEmail" THEN @@results += (s.person_id->("emailtagihan"->t.email_name))
+      WHEN "HasOthersEmail" THEN @@results += (s.person_id->("emaillain"->t.email_name))
+    END;
+    
+    propinsisemua = SELECT s FROM Person:s -((HasWorkAddress|HasPermanentAddress|HasOthersAddress):e)- Address:t -(HasAddressProvince)- Province:m
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasPermanentAddress" THEN @@results += (s.person_id-> ("kdpropinsitetap"->m.province_code))
+      WHEN "HasWorkAddress" THEN @@results += (s.person_id->("kdpropinsikerja"->m.province_code))
+      WHEN "HasOthersAddress" THEN @@results += (s.person_id->("kdpropinsilain"->m.province_code))
+    END;
+  
+    zipcodesemua = SELECT s FROM Person:s -((HasWorkAddress|HasPermanentAddress|HasOthersAddress):e)- Address:t -(HasAddressZipCode)- ZipCode:m
+    WHERE s.person_id == y
+    ACCUM
+    CASE e.type
+      WHEN "HasPermanentAddress" THEN @@results += (s.person_id-> ("kodepostetap"->m.zipcode_number))
+      WHEN "HasWorkAddress" THEN @@results += (s.person_id->("kdposkerja"->m.zipcode_number))
+      WHEN "HasOthersAddress" THEN @@results += (s.person_id->("kdposlain"->m.zipcode_number))
+    END;
+
+    alamattagihansemua = SELECT s FROM Person:s -(HasPolicyCertificateInsured)- PolicyCertificate:pc -(HasPolicyCertificate)- Policy:p -(HasPolicyBillingAddress)- Address:r -(HasAddressZipCode)- ZipCode:w
+    WHERE s.person_id == y
+    ACCUM @@results += (s.person_id -> ("kodepostagihan"->w.zipcode_number));
+
+  END;
+  END;
+  
+ 
+  PRINT @@results;
+  
+}
