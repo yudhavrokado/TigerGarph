@@ -1,0 +1,40 @@
+CREATE DISTRIBUTED QUERY yd_Eyeball_Benefit_Query(SET<VERTEX<PersonID>> Nomor_KTP) FOR GRAPH ifgl { 
+  GroupByAccum<VERTEX benefit_id, SetAccum<STRING> policy_id, MaxAccum<STRING>admedika_card_display, MaxAccum<STRING>admedika_number,
+    MaxAccum<STRING>admedika_plan, MaxAccum<FLOAT>advantage_code, MaxAccum<STRING>annuity_branch_code, MaxAccum<FLOAT>benefit_amount,
+    MaxAccum<STRING>benefit_code, MaxAccum<STRING>benefit_formula_code, MaxAccum<DOUBLE>benefit_limit, MaxAccum<STRING>benefit_source_code,
+    MaxAccum<STRING>benefit_type_code, MaxAccum<DOUBLE>benefit_value, MaxAccum<STRING>bp_formula_code, MaxAccum<STRING>cabas_code,
+    MaxAccum<STRING>class_code, MaxAccum<STRING>currency_code, MaxAccum<FLOAT>description, MaxAccum<STRING>due_date_formula_code,
+    MaxAccum<STRING>end_payment_formula_code, MaxAccum<STRING>expired_formula_code, MaxAccum<FLOAT>frequency_code,
+    MaxAccum<FLOAT>frequency_factor, MaxAccum<STRING>limit_code, MaxAccum<STRING>limit_rule, MaxAccum<STRING>limit_type,
+    MaxAccum<STRING>management_code, MaxAccum<STRING>payment_method_code, MaxAccum<FLOAT>payment_period,
+    MaxAccum<FLOAT>period_time, MaxAccum<STRING>plan_code, MaxAccum<STRING>pmb_formula_last_code, MaxAccum<STRING>premium_formula_code,
+    MaxAccum<STRING>price_code, MaxAccum<STRING>product_code, MaxAccum<DATETIME>record_date, MaxAccum<STRING>record_user,
+    MaxAccum<STRING>spa_number, MaxAccum<STRING>src_benefit_code, MaxAccum<STRING>system_source_code> @@results;
+  SetAccum<STRING> @policy_id;
+  
+  Start = {Nomor_KTP};
+  searching_person = SELECT t FROM Start:s -(HasPersonID)- Person:t;
+  
+  searching_polis_nadm = SELECT t FROM searching_person:s -(HasPolicyInsured)- Policy:t
+  ACCUM t.@policy_id += t.policy_id;
+  searching_polis_other = SELECT t FROM searching_person:s -(HasPolicyCertificateInsured)- PolicyCertificate:pc -(HasPolicyCertificate)- Policy:t
+  ACCUM t.@policy_id += t.policy_id;
+  
+  searching_benefit_nadm = SELECT t FROM searching_polis_nadm:s -(HasPolicyCoverage)- Coverage:c -(HasCoverageBenefit)- Benefit:t
+  ACCUM @@results += (t -> s.@policy_id, t.admedika_card_display, t.admedika_number, t.admedika_plan, t.advantage_code, t.annuity_branch_code, t.benefit_amount,
+    t.benefit_code, t.benefit_formula_code, t.benefit_limit, t.benefit_source_code, t.benefit_type_code, t.benefit_value, t.bp_formula_code, t.cabas_code,
+    t.class_code, t.currency_code, t.description, t.due_date_formula_code, t.end_payment_formula_code, t.expired_formula_code, t.frequency_code,
+    t.frequency_factor, t.limit_code, t.limit_rule, t.limit_type, t.management_code, t.payment_method_code, t.payment_period,
+    t.period_time, t.plan_code, t.pmb_formula_last_code, t.premium_formula_code, t.price_code, t.product_code, t.record_date, t.record_user,
+    t.spa_number, t.src_benefit_code, t.system_source_code);
+  
+  searching_benefit_other = SELECT t FROM searching_polis_other:s -(HasPolicyCoverage)- Coverage:c -(HasCoverageBenefit)- Benefit:t
+  ACCUM @@results += (t -> s.@policy_id, t.admedika_card_display, t.admedika_number, t.admedika_plan, t.advantage_code, t.annuity_branch_code, t.benefit_amount,
+    t.benefit_code, t.benefit_formula_code, t.benefit_limit, t.benefit_source_code, t.benefit_type_code, t.benefit_value, t.bp_formula_code, t.cabas_code,
+    t.class_code, t.currency_code, t.description, t.due_date_formula_code, t.end_payment_formula_code, t.expired_formula_code, t.frequency_code,
+    t.frequency_factor, t.limit_code, t.limit_rule, t.limit_type, t.management_code, t.payment_method_code, t.payment_period,
+    t.period_time, t.plan_code, t.pmb_formula_last_code, t.premium_formula_code, t.price_code, t.product_code, t.record_date, t.record_user,
+    t.spa_number, t.src_benefit_code, t.system_source_code);
+  
+  PRINT @@results; 
+}
