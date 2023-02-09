@@ -1,0 +1,29 @@
+CREATE DISTRIBUTED QUERY yd_Eyeball_Product_Query(SET<VERTEX<PersonID>> Nomor_KTP) FOR GRAPH ifgl { 
+  SetAccum<STRING> @policy_id;
+  GroupByAccum<VERTEX product_code, SetAccum<STRING> policy_id, MaxAccum<STRING>branch_code, MaxAccum<STRING>code,
+    MaxAccum<STRING>description, MaxAccum<FLOAT>duration, MaxAccum<STRING>is_offering, MaxAccum<STRING>lpp_age,
+    MaxAccum<FLOAT>max_duration, MaxAccum<STRING>method_period, MaxAccum<FLOAT>min_duration, MaxAccum<DOUBLE>min_sum_insured,
+    MaxAccum<FLOAT>point, MaxAccum<DOUBLE>premium_min, MaxAccum<STRING>product_name, MaxAccum<STRING>product_status,
+    MaxAccum<STRING>product_type_code, MaxAccum<DATETIME>record_date, MaxAccum<STRING>record_user, MaxAccum<STRING>skg,
+    MaxAccum<STRING>system_source_code, MaxAccum<DATETIME>updated_date, MaxAccum<STRING>updated_user, MaxAccum<FLOAT>variable> @@results;
+  
+  Start = {Nomor_KTP};
+  searching_person = SELECT t FROM Start:s -(HasPersonID)- Person:t;
+  
+  searching_polis_nadm = SELECT t FROM searching_person:s -(HasPolicyInsured)- Policy:t
+  ACCUM t.@policy_id += t.policy_id;
+  searching_polis_other = SELECT t FROM searching_person:s -(HasPolicyCertificateInsured)- PolicyCertificate:pc -(HasPolicyCertificate)- Policy:t
+  ACCUM t.@policy_id += t.policy_id; 
+  
+  searching_produk_nadm = SELECT t from searching_polis_nadm:s -(HasPolicyProduct)- Product:t
+  ACCUM @@results += (t -> s.@policy_id, t.branch_code, t.code, t.description, t.duration, t.is_offering, t.lpp_age,
+    t.max_duration, t.method_period, t.min_duration, t.min_sum_insured, t.point, t.premium_min, t.product_name, t.product_status,
+    t.product_type_code, t.record_date, t.record_user, t.skg, t.system_source_code, t.updated_date, t.updated_user, t.variable);
+  
+  searching_produk_other = SELECT t FROM searching_polis_other:s -(HasPolicyProduct)- Product:t
+  ACCUM @@results += (t -> s.@policy_id, t.branch_code, t.code, t.description, t.duration, t.is_offering, t.lpp_age,
+    t.max_duration, t.method_period, t.min_duration, t.min_sum_insured, t.point, t.premium_min, t.product_name, t.product_status,
+    t.product_type_code, t.record_date, t.record_user, t.skg, t.system_source_code, t.updated_date, t.updated_user, t.variable);
+  
+  PRINT @@results; 
+}
