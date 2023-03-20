@@ -1,12 +1,11 @@
 CREATE DISTRIBUTED QUERY yd_Query_DashboardCustomer360() FOR GRAPH ifgl { 
-  MaxAccum<STRING> @master, @id_number, @address, @gender, @no_hp, @email, @pob, @product, @policy_product, @channel;
+  MaxAccum<STRING> @id_number, @address, @gender, @no_hp, @email, @pob, @product, @policy_product, @channel;
+  MaxAccum<INT> @age;
+  MaxAccum<DOUBLE> @premium_per_moth;
   MinAccum<DATETIME> @min_insureddate;
   MaxAccum<DATETIME> @max_insureddate, @dob;
   SumAccum<INT> @count_policy, @count_child = 0;
   
-  /*getmasterperson = SELECT t FROM Person:s -(MergedFrom>:e)- Person:t
-  ACCUM t.@master += s.person_id, 
-  IF e.type == "MergedFrom" THEN t.@count_child += 1 END;*/
   
   mulai = SELECT s FROM Person:s -((HasPersonID|HasPermanentAddress|HasPersonGender|HasPersonPOB|HasPersonDOB|HasPermanentEmail|HasPermanentPhone|HasOthersAddress|HasWorkAddress|HasOthersEmail|HasBillingEmail|MergedFrom):e)- :t
   ACCUM
@@ -17,16 +16,20 @@ CREATE DISTRIBUTED QUERY yd_Query_DashboardCustomer360() FOR GRAPH ifgl {
     WHEN e.type =="HasWorkAddress" THEN s.@address += t.address_name
     WHEN e.type =="HasPersonGender" THEN s.@gender += t.gender
     WHEN e.type =="HasPersonPOB" THEN s.@pob += t.place_of_birth
-    WHEN e.type =="HasPersonDOB" THEN s.@dob += t.date_of_birth
+    WHEN e.type =="HasPersonDOB" THEN s.@dob += t.date_of_birth, s.@age += (datetime_diff(now(),t.date_of_birth))/31536000
     WHEN e.type =="HasPermanentPhone" THEN s.@no_hp += t.phone_number
     WHEN e.type =="HasPermanentEmail" THEN s.@email += t.email_name
     WHEN e.type =="HasOthersEmail" THEN s.@email += t.email_name
     WHEN e.type =="HasBillingEmail" THEN s.@email += t.email_name
     WHEN e.type =="MergedFrom" THEN s.@count_child += 1
-    WHEN e.type =="MergedFrom" THEN s.@master += t.person_id
   END;
+    
+  getpremiumpolicy = SELECT s FROM Policy:s -(HasPolicyCoverage)- Coverage:t
+  ACCUM 
+  IF t.premium_amount > 0  THEN s.@premium_per_moth += t.premium_amount END,
+  IF t.premium_amount <= 0 THEN s.@premium_per_moth += 0 END;
   
-  getpolisproduk = SELECT s FROM Policy:s -(HasPolicyProduct)- Product:t
+  getpolisproduk = SELECT s FROM getpremiumpolicy:s -(HasPolicyProduct)- Product:t
   ACCUM s.@product += t.product_name,
   IF s.agent_id != "" THEN s.@channel += "AGENCY" END,
   IF t.product_name LIKE "%BTN%" THEN s.@channel += "BANCAS" END,
@@ -83,19 +86,22 @@ CREATE DISTRIBUTED QUERY yd_Query_DashboardCustomer360() FOR GRAPH ifgl {
   IF s.agent_id == "0000075069" THEN s.@channel += "WORKSITE" END;
   
   getpoliscertificateproduct = SELECT t FROM getpolisproduk:s -(HasPolicyCertificate)- PolicyCertificate:t
-  ACCUM t.@product += s.@product;
+  ACCUM t.@product += s.@product, t.@premium_per_moth+= s.@premium_per_moth;
   
-  result1 = SELECT t FROM getpolisproduk:s -(HasPolicyInsured|HasPolicyProducer|HasPolicyHolder)- Person:t
-  ACCUM t.@policy_product+= s.@product, t.@count_policy += s.outdegree("HasPolicyInsured"), t.@channel += s.@channel,
+  result1 = SELECT t FROM getpolisproduk:s -(HasPolicyInsured|HasPolicyHolder|HasPolicyProducer)- Person:t
+  ACCUM t.@policy_product+= s.@product, t.@count_policy += s.outdegree("HasPolicyInsured"), t.@channel += s.@channel, t.@premium_per_moth += s.@premium_per_moth,
   IF t.@count_policy > 1 THEN t.@max_insureddate += s.insurance_start_date, t.@min_insureddate += s.insurance_start_date
-  ELSE IF t.@count_policy <= 1 THEN t.@max_insureddate += s.insurance_start_date, t.@min_insureddate += s.insurance_start_date END;
+  ELSE IF t.@count_policy <= 1 THEN t.@max_insureddate += s.insurance_start_date, t.@min_insureddate += s.insurance_start_date END
+  ;
   
   result2 = SELECT t FROM getpoliscertificateproduct:s -(HasPolicyCertificateInsured)- Person:t
-  ACCUM t.@policy_product += s.@product, t.@count_policy += s.outdegree("HasPolicyCertificateInsured"), t.@channel += "CORPO",
+  ACCUM t.@policy_product += s.@product, t.@count_policy += s.outdegree("HasPolicyCertificateInsured"), t.@channel += "CORPO", t.@premium_per_moth += s.@premium_per_moth,
   IF t.@count_policy > 1 AND s.nuke == "" THEN t.@max_insureddate += s.policy_start_date, t.@min_insureddate += s.policy_start_date END,
   IF t.@count_policy <= 1 AND s.nuke == "" THEN t.@max_insureddate += s.policy_start_date, t.@min_insureddate += s.policy_start_date END,
   IF t.@count_policy > 1 AND s.nuke == "001" THEN t.@max_insureddate += s.insurance_date, t.@min_insureddate += s.insurance_date END,
-  IF t.@count_policy <= 1 AND s.nuke == "001" THEN t.@max_insureddate += s.insurance_date, t.@min_insureddate += s.insurance_date END;
+  IF t.@count_policy <= 1 AND s.nuke == "001" THEN t.@max_insureddate += s.insurance_date, t.@min_insureddate += s.insurance_date END
+  ;
   
-  PRINT result1, result2;
+
+  PRINT result1,result2;
 }
