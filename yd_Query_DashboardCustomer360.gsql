@@ -1,13 +1,17 @@
 CREATE DISTRIBUTED QUERY yd_Query_DashboardCustomer360() FOR GRAPH ifgl { 
-  MaxAccum<STRING> @id_number, @address, @gender, @no_hp, @email, @pob, @product, @policy_product, @channel;
+  MaxAccum<STRING> @master, @id_number, @address, @gender, @no_hp, @email, @pob, @product, @channel, @generasi;
   MaxAccum<INT> @age;
   MaxAccum<DOUBLE> @premium_per_moth;
   MinAccum<DATETIME> @min_insureddate;
   MaxAccum<DATETIME> @max_insureddate, @dob;
   SumAccum<INT> @count_policy, @count_child = 0;
   
+  getmasterperson = SELECT t FROM Person:s -(MergedFrom>:e)- Person:t
+  ACCUM t.@master += s.person_id, 
+  IF e.type == "MergedFrom" THEN t.@count_child += 1 END
+  ;
   
-  mulai = SELECT s FROM Person:s -((HasPersonID|HasPermanentAddress|HasPersonGender|HasPersonPOB|HasPersonDOB|HasPermanentEmail|HasPermanentPhone|HasOthersAddress|HasWorkAddress|HasOthersEmail|HasBillingEmail|MergedFrom):e)- :t
+  mulai = SELECT s FROM Person:s -((HasPersonID|HasPermanentAddress|HasPersonGender|HasPersonPOB|HasPersonDOB|HasPermanentEmail|HasPermanentPhone|HasOthersAddress|HasWorkAddress|HasOthersEmail|HasBillingEmail|HasHomePhone|HasMobilePhone|HasBillingPhone|HasOthersPhone|HasWorkPhone|HasFax):e)- :t
   ACCUM
   CASE 
     WHEN e.type =="HasPersonID" THEN s.@id_number += t.id_number
@@ -16,12 +20,23 @@ CREATE DISTRIBUTED QUERY yd_Query_DashboardCustomer360() FOR GRAPH ifgl {
     WHEN e.type =="HasWorkAddress" THEN s.@address += t.address_name
     WHEN e.type =="HasPersonGender" THEN s.@gender += t.gender
     WHEN e.type =="HasPersonPOB" THEN s.@pob += t.place_of_birth
-    WHEN e.type =="HasPersonDOB" THEN s.@dob += t.date_of_birth, s.@age += (datetime_diff(now(),t.date_of_birth))/31536000
+    WHEN e.type =="HasPersonDOB" THEN s.@dob += t.date_of_birth, s.@age += (datetime_diff(now(),t.date_of_birth))/31536000,
+      CASE
+        WHEN (year(t.date_of_birth) BETWEEN 1946 AND 1964) THEN s.@generasi += "Baby Boomer"
+        WHEN (year(t.date_of_birth) BETWEEN 1965 AND 1980) THEN s.@generasi += "Generasi X"
+        WHEN (year(t.date_of_birth) BETWEEN 1981 AND 1996) THEN s.@generasi += "Millennials"
+        WHEN (year(t.date_of_birth) BETWEEN 1997 AND 2012) THEN s.@generasi += "Generasi Z"
+        WHEN year(t.date_of_birth) >= 2013 THEN s.@generasi += "Generasi Alpha"
+      END
     WHEN e.type =="HasPermanentPhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasHomePhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasWorkPhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasMobilePhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasOthersPhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasFax" THEN s.@no_hp += t.phone_number
     WHEN e.type =="HasPermanentEmail" THEN s.@email += t.email_name
     WHEN e.type =="HasOthersEmail" THEN s.@email += t.email_name
     WHEN e.type =="HasBillingEmail" THEN s.@email += t.email_name
-    WHEN e.type =="MergedFrom" THEN s.@count_child += 1
   END;
     
   getpremiumpolicy = SELECT s FROM Policy:s -(HasPolicyCoverage)- Coverage:t
@@ -29,10 +44,13 @@ CREATE DISTRIBUTED QUERY yd_Query_DashboardCustomer360() FOR GRAPH ifgl {
   IF t.premium_amount > 0  THEN s.@premium_per_moth += t.premium_amount END,
   IF t.premium_amount <= 0 THEN s.@premium_per_moth += 0 END;
   
-  getpolisproduk = SELECT s FROM getpremiumpolicy:s -(HasPolicyProduct)- Product:t
+  getpolisproduk = SELECT s FROM Policy:s -(HasPolicyProduct)- Product:t
   ACCUM s.@product += t.product_name,
-  IF s.agent_id != "" THEN s.@channel += "AGENCY" END,
-  IF t.product_name LIKE "%BTN%" THEN s.@channel += "BANCAS" END,
+  IF t.product_name LIKE "%BTN%" THEN s.@channel += "BANCASS" END;
+  
+  getpolischannel = SELECT s FROM Policy:s
+  POST-ACCUM
+  IF s.system_source_code == "NADM" AND s.agent_id != "" THEN s.@channel += "AGENCY" END,
   IF s.agent_id == "0000074807" THEN s.@channel += "WORKSITE" END,
   IF s.agent_id == "0000074798" THEN s.@channel += "WORKSITE" END,
   IF s.agent_id == "0000751320" THEN s.@channel += "WORKSITE" END,
@@ -83,25 +101,29 @@ CREATE DISTRIBUTED QUERY yd_Query_DashboardCustomer360() FOR GRAPH ifgl {
   IF s.agent_id == "0000074905" THEN s.@channel += "WORKSITE" END,
   IF s.agent_id == "0000075066" THEN s.@channel += "WORKSITE" END,
   IF s.agent_id == "0000075067" THEN s.@channel += "WORKSITE" END,
-  IF s.agent_id == "0000075069" THEN s.@channel += "WORKSITE" END;
+  IF s.agent_id == "0000075069" THEN s.@channel += "WORKSITE" END,
+  /*IF (s.system_source_code == "NADM" AND s.@channel != "AGENCY" AND s.@channel != "WORKSITE" AND s.@channel != "BANCASS") THEN s.@channel += "NO CHANNEL" END,*/
+  IF s.system_source_code == "PLADM" THEN s.@channel += "CORPO" END,
+  IF s.system_source_code == "PKADM" THEN s.@channel += "CORPO" END,
+  IF s.system_source_code == "ASKES" THEN s.@channel += "CORPO" END;
   
-  getpoliscertificateproduct = SELECT t FROM getpolisproduk:s -(HasPolicyCertificate)- PolicyCertificate:t
-  ACCUM t.@product += s.@product, t.@premium_per_moth+= s.@premium_per_moth;
+  getpoliscertificateproduct = SELECT t FROM PolicyCertificate:t -(HasPolicyCertificate)- Policy:s
+  ACCUM t.@product += s.@product, t.@premium_per_moth+= s.@premium_per_moth, t.@channel += s.@channel;
   
-  result1 = SELECT t FROM getpolisproduk:s -(HasPolicyInsured|HasPolicyHolder|HasPolicyProducer)- Person:t
-  ACCUM t.@policy_product+= s.@product, t.@count_policy += s.outdegree("HasPolicyInsured"), t.@channel += s.@channel, t.@premium_per_moth += s.@premium_per_moth,
+  result1 = SELECT t FROM Person:t -(HasPolicyInsured)- Policy:s
+  ACCUM t.@product += s.@product, t.@count_policy += s.outdegree("HasPolicyInsured"), t.@channel += s.@channel, t.@premium_per_moth += s.@premium_per_moth,
   IF t.@count_policy > 1 THEN t.@max_insureddate += s.insurance_start_date, t.@min_insureddate += s.insurance_start_date
   ELSE IF t.@count_policy <= 1 THEN t.@max_insureddate += s.insurance_start_date, t.@min_insureddate += s.insurance_start_date END
-  ;
+  LIMIT 4;
   
-  result2 = SELECT t FROM getpoliscertificateproduct:s -(HasPolicyCertificateInsured)- Person:t
-  ACCUM t.@policy_product += s.@product, t.@count_policy += s.outdegree("HasPolicyCertificateInsured"), t.@channel += "CORPO", t.@premium_per_moth += s.@premium_per_moth,
+  result2 = SELECT t FROM Person:t -(HasPolicyCertificateInsured)- PolicyCertificate:s
+  ACCUM t.@product += s.@product, t.@count_policy += s.outdegree("HasPolicyCertificateInsured"), t.@channel += s.@channel, t.@premium_per_moth += s.@premium_per_moth,
   IF t.@count_policy > 1 AND s.nuke == "" THEN t.@max_insureddate += s.policy_start_date, t.@min_insureddate += s.policy_start_date END,
   IF t.@count_policy <= 1 AND s.nuke == "" THEN t.@max_insureddate += s.policy_start_date, t.@min_insureddate += s.policy_start_date END,
   IF t.@count_policy > 1 AND s.nuke == "001" THEN t.@max_insureddate += s.insurance_date, t.@min_insureddate += s.insurance_date END,
   IF t.@count_policy <= 1 AND s.nuke == "001" THEN t.@max_insureddate += s.insurance_date, t.@min_insureddate += s.insurance_date END
-  ;
+  LIMIT 4;
+ 
   
-
-  PRINT result1,result2;
+  PRINT result1, result2;
 }
