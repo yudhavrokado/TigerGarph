@@ -1,0 +1,134 @@
+CREATE QUERY yd_Insert_Vertex_Dashboard360() FOR GRAPH reporting { 
+  MaxAccum<STRING> @master, @id_number, @address, @gender, @no_hp, @email, @pob, @product, @channel, @generasi;
+  MaxAccum<INT> @age;
+  MaxAccum<DOUBLE> @premium_per_moth;
+  MinAccum<DATETIME> @min_insureddate;
+  MaxAccum<DATETIME> @max_insureddate, @dob;
+  SumAccum<INT> @count_policy, @count_child = 0;
+  
+  getmasterperson = SELECT t FROM Person:s -(MergedFrom>:e)- Person:t
+  ACCUM t.@master += s.person_id, 
+  IF e.type == "MergedFrom" THEN t.@count_child += 1 END
+  ;
+  
+   mulai = SELECT s FROM Person:s -((HasPersonID|HasPermanentAddress|HasPersonGender|HasPersonPOB|HasPersonDOB|HasPermanentEmail|HasPermanentPhone|HasOthersAddress|HasWorkAddress|HasOthersEmail|HasBillingEmail|HasHomePhone|HasMobilePhone|HasBillingPhone|HasOthersPhone|HasWorkPhone|HasFax):e)- :t
+  ACCUM
+  CASE 
+    WHEN e.type =="HasPersonID" THEN s.@id_number += t.id_number
+    WHEN e.type =="HasPermanentAddress" THEN s.@address += t.address_name
+    WHEN e.type =="HasOthersAddress" THEN s.@address += t.address_name
+    WHEN e.type =="HasWorkAddress" THEN s.@address += t.address_name
+    WHEN e.type =="HasPersonGender" THEN s.@gender += t.gender
+    WHEN e.type =="HasPersonPOB" THEN s.@pob += t.place_of_birth
+    WHEN e.type =="HasPersonDOB" THEN s.@dob += t.date_of_birth, s.@age += (datetime_diff(now(),t.date_of_birth))/31536000,
+      CASE
+        WHEN (year(t.date_of_birth) BETWEEN 1946 AND 1964) THEN s.@generasi += "Baby Boomer"
+        WHEN (year(t.date_of_birth) BETWEEN 1965 AND 1980) THEN s.@generasi += "Generasi X"
+        WHEN (year(t.date_of_birth) BETWEEN 1981 AND 1996) THEN s.@generasi += "Millennials"
+        WHEN (year(t.date_of_birth) BETWEEN 1997 AND 2012) THEN s.@generasi += "Generasi Z"
+        WHEN year(t.date_of_birth) >= 2013 THEN s.@generasi += "Generasi Alpha"
+      END
+    WHEN e.type =="HasPermanentPhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasHomePhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasWorkPhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasMobilePhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasOthersPhone" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasFax" THEN s.@no_hp += t.phone_number
+    WHEN e.type =="HasPermanentEmail" THEN s.@email += t.email_name
+    WHEN e.type =="HasOthersEmail" THEN s.@email += t.email_name
+    WHEN e.type =="HasBillingEmail" THEN s.@email += t.email_name
+  END;
+    
+  getpremiumpolicy = SELECT s FROM Policy:s -(HasPolicyCoverage)- Coverage:t
+  ACCUM 
+  IF t.premium_amount > 0  THEN s.@premium_per_moth += t.premium_amount END,
+  IF t.premium_amount <= 0 THEN s.@premium_per_moth += 0 END;
+  
+  getpolisproduk = SELECT s FROM Policy:s -(HasPolicyProduct)- Product:t
+  ACCUM s.@product += t.product_name,
+  IF t.product_name LIKE "%BTN%" THEN s.@channel += "BANCASS" END;
+  
+  getpolischannel = SELECT s FROM Policy:s
+  POST-ACCUM
+  IF s.system_source_code == "NADM" AND s.agent_id != "" THEN s.@channel += "AGENCY" END,
+  IF s.agent_id == "0000074807" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074798" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751320" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074799" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751319" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074996" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074811" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751329" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074874" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074902" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074796" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751323" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074883" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074802" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751331" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074813" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751324" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074820" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751325" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074822" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075003" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074900" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074892" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751326" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075072" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751328" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075011" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074835" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074763" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751321" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074782" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075076" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075075" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074989" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074885" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751322" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075010" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074906" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074877" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074804" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074888" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074808" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074757" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000751327" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074992" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074788" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074876" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000074905" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075066" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075067" THEN s.@channel += "WORKSITE" END,
+  IF s.agent_id == "0000075069" THEN s.@channel += "WORKSITE" END,
+  /*IF (s.system_source_code == "NADM" AND s.@channel != "AGENCY" AND s.@channel != "WORKSITE" AND s.@channel != "BANCASS") THEN s.@channel += "NO CHANNEL" END,*/
+  IF s.system_source_code == "PLADM" THEN s.@channel += "CORPO" END,
+  IF s.system_source_code == "PKADM" THEN s.@channel += "CORPO" END,
+  IF s.system_source_code == "ASKES" THEN s.@channel += "CORPO" END;
+  
+  getpoliscertificateproduct = SELECT t FROM PolicyCertificate:t -(HasPolicyCertificate)- Policy:s
+  ACCUM t.@product += s.@product, t.@premium_per_moth+= s.@premium_per_moth, t.@channel += s.@channel;
+  
+  result1 = SELECT t FROM Person:t -(HasPolicyInsured)- Policy:s
+  ACCUM t.@product += s.@product, t.@count_policy += s.outdegree("HasPolicyInsured"), t.@channel += s.@channel, t.@premium_per_moth += s.@premium_per_moth,
+  IF t.@count_policy > 1 THEN t.@max_insureddate += s.insurance_start_date, t.@min_insureddate += s.insurance_start_date
+  ELSE IF t.@count_policy <= 1 THEN t.@max_insureddate += s.insurance_start_date, t.@min_insureddate += s.insurance_start_date END
+  ;
+  
+  result2 = SELECT t FROM Person:t -(HasPolicyCertificateInsured)- PolicyCertificate:s
+  ACCUM t.@product += s.@product, t.@count_policy += s.outdegree("HasPolicyCertificateInsured"), t.@channel += s.@channel, t.@premium_per_moth += s.@premium_per_moth,
+  IF t.@count_policy > 1 AND s.nuke == "" THEN t.@max_insureddate += s.policy_start_date, t.@min_insureddate += s.policy_start_date END,
+  IF t.@count_policy <= 1 AND s.nuke == "" THEN t.@max_insureddate += s.policy_start_date, t.@min_insureddate += s.policy_start_date END,
+  IF t.@count_policy > 1 AND s.nuke == "001" THEN t.@max_insureddate += s.insurance_date, t.@min_insureddate += s.insurance_date END,
+  IF t.@count_policy <= 1 AND s.nuke == "001" THEN t.@max_insureddate += s.insurance_date, t.@min_insureddate += s.insurance_date END
+  ;
+  
+  insertresut1 = SELECT s FROM result1:s
+  POST-ACCUM INSERT INTO customer_360 VALUES (s.person_id, s.@count_policy, s.@min_insureddate, s.@max_insureddate, s.@product, s.@channel, s.system_source_code, s.province_code, s.marital_status, s.@id_number, s.@master, s.@pob, s.@dob, s.@age, s.@address, s.@premium_per_moth, s.@email, s.@gender, s.@generasi, s.@no_hp, s.person_name);
+  
+  insertresut2 = SELECT s FROM result2:s
+  POST-ACCUM INSERT INTO customer_360 VALUES (s.person_id, s.@count_policy, s.@min_insureddate, s.@max_insureddate, s.@product, s.@channel, s.system_source_code, s.province_code, s.marital_status, s.@id_number, s.@master, s.@pob, s.@dob, s.@age, s.@address, s.@premium_per_moth, s.@email, s.@gender, s.@generasi, s.@no_hp, s.person_name);
+  
+  PRINT "yd_Insert_Vertex_Dashboard360 works!"; 
+}
